@@ -1,0 +1,108 @@
+name: soc-io
+version: 0.1.0
+spec: '0.1'
+identity:
+  slug: soc-io
+  display_name: Peripheral block of to2610-soc
+  category: soc
+  maturity: simulated
+  summary: 'The peripherals of to2610-soc assembled from the catalogue behind one APB4
+    slave port. The KianV SoC sits outside, in the chip top, and reaches this block
+    through a window of its address map.'
+# 没有核：对外的 APB4 口是这一块唯一的发起方，由芯片顶层里的 KianV 经 kv_apb 驱动。
+# 地址是窗内的偏移，窗在 0x4000_0000。中断向量的次序就是实例的次序，接 PLIC 的 11 号起；没有中断的实例排在最后
+bus: apb4
+instances:
+- name: uart1
+  of: uart
+  with:
+    fifoDepth: 8
+    parity: false
+    flowctrl: true
+  addr: 0x0000
+- name: gpio1
+  of: gpio
+  with:
+    numPins: 16
+    irq: true
+    bidir: true
+    debounce: false
+  addr: 0x1000
+- name: timer0
+  of: timer
+  with:
+    channels: 2
+    capture: true
+  addr: 0x2000
+- name: wdt0
+  of: wdt
+  with:
+    width: 32
+    window: true
+  addr: 0x3000
+- name: rtc0
+  of: rtc
+  with:
+    alarm: true
+  addr: 0x4000
+- name: i2c0
+  of: i2c
+  with:
+    fifoDepth: 4
+    slave: false
+  addr: 0x5000
+- name: spi2
+  of: spi
+  with:
+    fifoDepth: 8
+    csWidth: 2
+    # 单线：IO0 是 MOSI、IO1 是 MISO，全双工。多线那几档每一帧只发或只收，接不了普通的 SPI 器件
+    lines: 1
+  addr: 0x6000
+- name: onew0
+  of: onew
+  with:
+    crc: true
+  addr: 0x7000
+- name: i2s0
+  of: i2s
+  with:
+    rx: true
+  addr: 0x8000
+- name: can0
+  of: can
+  with:
+    filter: true
+  addr: 0x9000
+- name: ps2
+  of: ps2
+  with:
+    tx: true
+  addr: 0xA000
+- name: rng0
+  of: rng
+  addr: 0xB000
+- name: emac0
+  of: emac
+  with:
+    # 帧缓冲区是触发器搭的，每个字都要钱，仿真也跟着慢。收发各 132 字、528 字节：放得下组网实验里最大的帧
+    # （路由器每口 512 字节，加 4 字节 FCS），主机的 MTU 照那边设 498
+    bufWords: 264
+    promisc: false
+  addr: 0xC000
+- name: pwm0
+  of: pwm
+  with:
+    channels: 4
+    deadtime: false
+  addr: 0xE000
+- name: crc0
+  of: crc
+  addr: 0xF000
+deps:
+  hwcore: ^0.1
+  amba: ^0.1
+asic:
+  top: to2610_soc_io
+  frame: none
+  mhz: 50

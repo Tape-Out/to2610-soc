@@ -1,0 +1,21 @@
+expect to2610 xio
+expect hole ok 00000000
+expect ident ok 534f4331
+expect reset ok 00015c09
+expect regs ok 00000000
+expect gpio ok 0055aaff
+expect girq ok 0000000c
+expect uart ok 5a7b9cbd
+expect uirq ok 0000000b
+expect onew ok 00000006
+expect ps2 ok 0000011c
+expect emac ok 00020040
+expect spi ok ffedcba9
+expect i2s ok 1234abcd
+expect sdloop ok 215487ba
+expect sdirq ok 0000001b
+expect sdpad ok 00000000
+expect sderr ok 00000001
+expect tirq ok 0000000d
+expect crc ok 000000a1
+expect done

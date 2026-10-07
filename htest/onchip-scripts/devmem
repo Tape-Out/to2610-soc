@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""假的 devmem：主机上测 sw/ 里那几个在芯片上用的脚本。寄存器的状态存在 $DEVMEM_STATE 指的文件里。
+
+照寄存器说明另写的一份模型，不抄脚本里的算式：时钟控制（0x4005_0000）、SerDes（0x4001_0000）、
+sysctl（0x4003_0000），窗里别的地址写什么读什么。$DEVMEM_WIRED 为 1 时当作 SerDes 的 TX 在板上接回了 RX。
+PLL 照宏的规矩：N、SELECT、OD 只在 EN 由 0 变 1 的那一下取进去，开着改的不算数，并记一笔 misuse。
+"""
+import json
+import os
+import sys
+
+path = os.environ["DEVMEM_STATE"]
+try:
+    st = json.load(open(path))
+except (OSError, ValueError):
+    st = {"mem": {}, "pll": 0x00010620, "div": 0, "run": None, "fresh": True, "misuse": 0,
+          "sd": 0, "inj": 0, "snap": [0, 0], "q": []}
+
+addr = int(sys.argv[1], 0)
+val = int(sys.argv[3], 0) if len(sys.argv) > 3 else None
+CLK, SD, SYS = 0x40050000, 0x40010000, 0x40030000
+
+
+def legal(p):
+    n, x2 = p & 0xFF, p >> 8 & 1
+    vco = 25 * n * (2 if x2 else 1)
+    return n > 16 and 500 <= vco <= 1200
+
+
+def freq():
+    d = st["div"] & 0xFF
+    if st["pll"] >> 16 & 1:
+        mhz = 25.0
+    elif st["run"] is not None:
+        p = st["run"]
+        mhz = 25.0 * (p & 0xFF) * (2 if p >> 8 & 1 else 1) / (1 << (p >> 9 & 3))
+    else:
+        mhz = 0.0
+    return round(mhz / (2 * (d + 1)) * 65536 / 50)
+
+
+def aligned():
+    c = st["sd"]
+    return bool(c & 1) and (bool(c & 2) or os.environ.get("DEVMEM_WIRED") == "1")
+
+
+out = None
+if addr == CLK + 4:
+    if val is None:
+        out = st["pll"]
+    else:
+        was, now = st["pll"] >> 17 & 1, val >> 17 & 1
+        if now and not was:
+            st["run"] = val & 0x7FF if legal(val) else None
+        elif now and was and (val & 0x7FF) != (st["pll"] & 0x7FF):
+            st["misuse"] += 1
+        elif not now:
+            st["run"] = None
+        st["pll"] = val & 0x307FF
+elif addr == CLK + 8:
+    if val is None:
+        out = st["div"]
+    else:
+        if val >> 17 & 1 and not st["div"] >> 17 & 1 and freq() == 0:
+            st["misuse"] += 1
+        st["div"] = val & 0x300FF
+elif addr == CLK + 12:
+    out = (0x80000000 if st["fresh"] else 0) | freq()
+    st["fresh"] = not st["fresh"]
+elif addr == CLK:
+    out = 0x434C4B31
+elif addr == SD:
+    out = 0x53524431
+elif addr == SD + 4:
+    if val is None:
+        out = st["sd"]
+    else:
+        st["sd"] = val & 0x10F
+elif addr == SD + 8 and val is not None:
+    if val & 2:
+        st["inj"], st["snap"] = 0, [0, 0]
+    if val & 1:
+        st["inj"] += 1
+    if val & 4:
+        on = aligned() and st["sd"] & 0xC == 0xC
+        st["snap"] = [31250 if on else 0, st["inj"] if on else 0]
+elif addr == SD + 12:
+    out = (3 if aligned() else 0) | (8 if st["q"] else 0)
+elif addr == SD + 16 and val is not None:
+    if aligned() and not st["sd"] & 8:
+        st["q"].append(val & 0x1FF)
+elif addr == SD + 20:
+    out = 0x80000000 | st["q"].pop(0) if st["q"] else 0
+elif addr == SD + 24:
+    out = st["snap"][0] + 4
+elif addr in (SD + 28, SD + 32):
+    out = 0
+elif addr == SD + 36:
+    out = st["snap"][0]
+elif addr == SD + 40:
+    out = st["snap"][1]
+elif addr == SYS:
+    out = 0x534F4331
+elif val is None:
+    out = st["mem"].get(str(addr), 0)
+else:
+    st["mem"][str(addr)] = val & 0xFFFFFFFF
+
+json.dump(st, open(path, "w"))
+if val is None:
+    print(f"0x{out:08X}")

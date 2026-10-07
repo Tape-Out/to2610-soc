@@ -1,0 +1,6 @@
+reject trap
+expect sum ok, jump
+expect to2610 sdm
+expect self 00100018
+expect adc0 mv 0000033
+expect adc0 mv 0000033

@@ -16,7 +16,7 @@
 //   x11   gpio1[11]   计时器捕获 0   看门狗复位出   随机源入
 //
 // 没选到焊盘上的输入给空闲电平：串口、I2C、单总线、CAN、PS/2 是高，其余是低。
-// 这个形态里 SerDes 的线路时钟就是系统时钟，线速率 12.5 Mbit/s。
+// 这个形态里没有 PLL，SerDes 的线路时钟就是系统时钟，线速率 12.5 Mbit/s。
 // 数字式 ADC 与 DAC 不另占功能组：sdm 的 PINS 位一开，x6 至 x11 在第 0 组里出的就是它的六根脚。
 `default_nettype none
 module soc_frame (
@@ -66,7 +66,9 @@ module soc_frame (
     end
   endgenerate
 
-  soc_core core (
+  soc_core #(
+      .MPW(0)
+  ) core (
       .clk          (clk),
       .rst_n        (rst_n),
       .bidir_in     (bidir_in),
@@ -110,9 +112,16 @@ module soc_frame (
       .rmii_rx_er   (`PAD(6, 2, 1'b0)),
       .pwm          (pwm),
       .pwm_n        (),
-      .sd_lclk      (clk),
       .sd_tx        (sd_tx),
       .sd_rx        (`PAD(5, 3, 1'b0)),
+      .pll_en       (),
+      .pll_bp       (),
+      .pll_n        (),
+      .pll_select   (),
+      .pll_od       (),
+      .pll_refclk   (),
+      .pll_ckout    (1'b0),
+      .clk_out      (),
       .padsel       (padsel)
   );
   `undef PAD

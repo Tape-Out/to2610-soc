@@ -9,14 +9,21 @@ expect uart ok 5a7b9cbd
 expect uirq ok 0000000b
 expect onew ok 00000006
 expect ps2 ok 0000011c
+expect i2c ok 0000a501
+expect can ok 00000003
+expect capt ok 00000001
+expect pins ok 12481000
 expect emac ok 00020040
 expect spi ok ffedcba9
+expect spics1 ok 0000ff3c
+expect rng ok 00000003
 expect i2s ok 1234abcd
 expect sdloop ok 215487ba
 expect sdirq ok 0000001b
 expect sdpad ok 00000000
 expect sderr ok 00000001
 expect sdm ok 00100018
+expect clk ok 434c4b31
 expect tirq ok 0000000d
 expect crc ok 000000a1
 expect done

@@ -56,6 +56,8 @@ enum { SD_EN = 1, SD_LOOP = 2, SD_PTX = 4, SD_PRX = 8, SD_IE = 0x100 };
 /* 数字式 ADC 与 DAC 在第 2 块，寄存器见 hwsrc/sdm.v */
 #define SDM (XIO + 0x20000u)
 enum { SDM_CTRL = 0x04, SDM_DAC0 = 0x08, SDM_ADC0 = 0x10, SDM_ADC1 = 0x14, SDM_WIN = 0x18, SDM_PRE = 0x1c };
+/* 时钟控制在第 5 块，寄存器见 hwsrc/clkctl.v 开头 */
+#define CLK (XIO + 0x50000u)
 #define SYSCTL (XIO + 0x30000u)
 #define PADSEL (SYSCTL + 4)
 /* 12 根复用焊盘都选同一组 */
@@ -130,7 +132,7 @@ int main(void) {
   uint32_t bad, got;
 
   /* 窗里没有东西的块读回 0，不陷入也不挂住；sysctl 认得出来 */
-  verdict("hole", REG(XIO + 0x00f0000) != 0 || REG(XIO + 0x50000) != 0, REG(XIO + 0x00f0000));
+  verdict("hole", REG(XIO + 0x00f0000) != 0 || REG(XIO + 0x60000) != 0, REG(XIO + 0x00f0000));
   verdict("ident", REG(SYSCTL) != 0x534f4331, REG(SYSCTL));
 
   /* 地址：复位值各不相同的先看复位值，再给每个实例的一个可写寄存器写上各不相同的数、全部写完再读回。
@@ -216,6 +218,79 @@ int main(void) {
   REG(PS2 + PS2_CTRL) = 0;
   verdict("ps2", bad, got & 0x3ff);
 
+  /* I2C：板上 0x50 有一个从设备，读它得 0xA5；0x51 没人应。SCL 设在 1 MHz（一位切五份） */
+  REG(I2C0 + I2C_PRESC) = hz / 5000000 - 1;
+  REG(I2C0 + I2C_CTRL) = 0x80;
+  REG(I2C0 + I2C_TXDATA) = 0xa1;
+  REG(I2C0 + I2C_CMD) = 0x90;
+  bad = UNTIL(!(REG(I2C0 + I2C_STATUS) & 2), 20000);
+  got = REG(I2C0 + I2C_STATUS) >> 7 & 1;
+  /* 读一个字节，不应答，停止 */
+  REG(I2C0 + I2C_CMD) = 0x68;
+  bad |= UNTIL(!(REG(I2C0 + I2C_STATUS) & 0x42), 20000);
+  got = got << 8 | (REG(I2C0 + I2C_RXDATA) & 0xff);
+  REG(I2C0 + I2C_TXDATA) = 0xa3;
+  REG(I2C0 + I2C_CMD) = 0x90;
+  bad |= UNTIL(!(REG(I2C0 + I2C_STATUS) & 2), 20000);
+  got = got << 8 | (REG(I2C0 + I2C_STATUS) >> 7 & 1);
+  REG(I2C0 + I2C_CMD) = 0x40;
+  bad |= UNTIL(!(REG(I2C0 + I2C_STATUS) & 0x42), 20000);
+  REG(I2C0 + I2C_CTRL) = 0;
+  verdict("i2c", bad || got != 0x00a501, got);
+
+  /* CAN：TX 在板上接回 RX，线上没有别的节点。发一帧，自己听得到自己，到应答位没人应，记的是应答错（3）。
+   * 哪一根没接上，头一个显性位就读不回来，记的是位错（5） */
+  REG(CAN0 + CAN_EVENTS) = 0x7f;
+  REG(CAN0 + CAN_CTRL) = 1;
+  bad = UNTIL(REG(CAN0 + CAN_STATUS) & 8, 20000);
+  REG(CAN0 + CAN_TXID) = 0x123 << 18;
+  REG(CAN0 + CAN_TXDLC) = 0;
+  REG(CAN0 + CAN_CMD) = 1;
+  bad |= UNTIL(REG(CAN0 + CAN_EVENTS) & 4, 20000);
+  got = REG(CAN0 + CAN_STATUS) >> 4 & 15;
+  REG(CAN0 + CAN_CMD) = 2;
+  REG(CAN0 + CAN_CTRL) = 0;
+  REG(CAN0 + CAN_TXID) = 0;
+  verdict("can", bad || got != 3, got);
+
+  /* 计时器的捕获脚：板上接着串口 1 的 TXD。发一个 0，停止位的上升沿把计数器抓进去；
+   * 抓完把计数器清掉，后面的比较测试从 0 数起 */
+  REG(TIMER0 + TIMER_CTRL) = 1;
+  got = REG(TIMER0 + TIMER_CAPT);
+  REG(UART1 + UART_TXDATA) = 0;
+  bad = UNTIL(!(REG(UART1 + UART_RXDATA) >> 31), 20000);
+  bad |= REG(TIMER0 + TIMER_CAPT) <= got;
+  got = REG(TIMER0 + TIMER_CAPT) > got;
+  REG(TIMER0 + TIMER_CTRL) = 2;
+  REG(TIMER0 + TIMER_CTRL) = 0;
+  verdict("capt", bad, got);
+
+  /* PWM 的四根脚与看门狗的复位出：这五根选到第 2 组，x0 至 x4 留作 GPIO 的输入，板上一对一接过来看。
+   * 占空比只有满与零，四路逐路单独拉高，读到的依次是 1、2、4、8（两路接反了也看得出）；
+   * 看门狗数完 200 拍，复位出拉高，关掉就落下 */
+  REG(GPIO1 + GPIO_DIR) = 0;
+  REG(PADSEL) = 0xaa8000;
+  REG(PWM0 + PWM_PERIOD) = 7;
+  REG(PWM0 + PWM_CTRL) = 5;
+  got = 0;
+  for (uint32_t k = 0; k < 4; k++) {
+    for (uint32_t j = 0; j < 4; j++) REG(PWM0 + PWM_DUTY + 4 * j) = j == k ? 8 : 0;
+    got = got << 4 | (REG(GPIO1 + GPIO_DIN) & 0x1f);
+  }
+  REG(PWM0 + PWM_CTRL) = 0;
+  REG(WDT0 + WDT_LOAD) = 200;
+  REG(WDT0 + WDT_CTRL) = 3;
+  bad = UNTIL(REG(GPIO1 + GPIO_DIN) & 0x10, 20000);
+  got = got << 8 | (REG(GPIO1 + GPIO_DIN) & 0x1f);
+  REG(WDT0 + WDT_CTRL) = 0;
+  got = got << 8 | (REG(GPIO1 + GPIO_DIN) & 0x1f);
+  /* 喂一次把「到期」那个记号清掉，否则它留着当中断挂在 PLIC 上 */
+  REG(WDT0 + WDT_FEED) = 0xa5a55a5a;
+  for (uint32_t k = 0; k < 4; k++) REG(PWM0 + PWM_DUTY + 4 * k) = 0;
+  REG(PWM0 + PWM_PERIOD) = 0;
+  REG(WDT0 + WDT_LOAD) = 0;
+  verdict("pins", bad || got != 0x12481000, got);
+
   /* 以太网：RMII 的发送在板上接回接收。发一帧广播，从接收半区读回来，长度是补齐到 60 再加 4 字节 FCS */
   REG(PADSEL) = F_NET;
   REG(EMAC0 + EMAC_MACLO) = 0x56789abc;
@@ -245,6 +320,28 @@ int main(void) {
   }
   REG(SPI2 + SPI_CSMODE) = 0;
   verdict("spi", bad || got != 0xffedcba9, got);
+
+  /* SPI 的第二根片选：板上的从设备被它选中时回原码，不取反 */
+  REG(SPI2 + SPI_CSID) = 1;
+  REG(SPI2 + SPI_CSMODE) = 2;
+  bad = 0, got = 0;
+  for (int i = 0; i < 2; i++) {
+    uint32_t r;
+    REG(SPI2 + SPI_TXDATA) = 0x3c + 0x47 * i;
+    bad |= UNTIL(!((r = REG(SPI2 + SPI_RXDATA)) >> 31), 20000);
+    got = got << 8 | (r & 0xff);
+  }
+  REG(SPI2 + SPI_CSMODE) = 0;
+  REG(SPI2 + SPI_CSID) = 0;
+  verdict("spics1", bad || got != 0xff3c, got);
+
+  /* 随机数：噪声脚在板上接着一个伪随机的码流。开起来，启动自检要过、要出得来数；
+   * 脚没接上的话是一串不变的电平，重复计数那一项当场不过 */
+  REG(RNG0 + RNG_CTRL) = 1;
+  bad = UNTIL(REG(RNG0 + RNG_STATUS) & 1, 40000);
+  got = REG(RNG0 + RNG_STATUS) & 0xf;
+  REG(RNG0 + RNG_CTRL) = 0;
+  verdict("rng", bad || got != 3, got);
 
   /* I2S：SD 出在板上接回入，发一帧左右声道，收回来的要是同两个数 */
   REG(I2S0 + I2S_DIV) = 3;
@@ -310,6 +407,13 @@ int main(void) {
     REG(SDM + SDM_CTRL) = 0;
     verdict("sdm", bad || got != 0x00100018, got);
   }
+
+  /* 时钟控制：Frame 形态里没有 PLL，寄存器照样在。复位值是旁路、N 32、OD 8 分频；写进去的读得回来；量到的频率是 0 */
+  bad = REG(CLK) != 0x434c4b31 || REG(CLK + 4) != 0x00010620;
+  REG(CLK + 4) = 0x00010428;
+  bad |= REG(CLK + 4) != 0x00010428 || (REG(CLK + 0xc) & 0xffffff) != 0;
+  REG(CLK + 4) = 0x00010620;
+  verdict("clk", bad, REG(CLK));
 
   /* 计时器：数到比较值，经 PLIC 的 13 号进来 */
   irq(TIMER0_IRQ);

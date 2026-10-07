@@ -6,11 +6,13 @@ KianV 的 54 根脚照 to2610-kvc 的样子交给黑盒仓的测试台（它带 
 
   GPIO      第 k 根与第 k+4 根对接（k 取 0 至 3）。sdm 接管了 x6 至 x11 时（出使能是 010111、低六根都不出）
             换成数字式 ADC 在板上的那一半：第 0 路量四分之一满幅的直流，第 1 路量第 0 路 DAC 的码流
+  看脚      x7 至 x11 选第 2 组（PWM 四路、看门狗复位出）、x0 至 x6 留作 GPIO 且都不出：x7 至 x11 一对一接到 x0 至 x4
   第 1 组   串口 1 的 TXD 接回 RXD、RTS_N 接回 CTS_N；单总线上一个只会应答复位的器件；
-            PS/2 上一个每 3 毫秒送一次 0x1C 的设备；CAN 的 TX 接回 RX
+            PS/2 上一个每 3 毫秒送一次 0x1C 的设备；CAN 的 TX 接回 RX；I2C 上一个地址 0x50、读出来是 0xA5 的从设备；
+            计时器的捕获脚接着串口 1 的 TXD
   第 2 组   RMII 的发送接回接收（TXD 到 RXD，TX_EN 到 CRS_DV）
-  第 3 组   SPI 上一个回声从设备（每个字节回上一个字节的反码，头一个回 0xFF，片选一抬就忘）；I2S 的 SD 出接回入；
-            SerDes 的 TX 接回 RX
+  第 3 组   SPI 上一个回声从设备（每个字节回上一个字节的反码，头一个回 0xFF，片选一抬就忘；由第二根片选选中时回原码）；
+            I2S 的 SD 出接回入；SerDes 的 TX 接回 RX；随机源脚上是一个 16 位 LFSR 的码流
 
 没人驱动的脚都由板上的上拉拉高。位表只写在 report.json 里一处，这里照着它生成，不另写一份。
 """
@@ -87,7 +89,7 @@ module tb (
   reg       sp_sck, miso;
   always @(posedge clk) begin
     sp_sck <= lv[0];
-    if (!m3 || lv[1]) begin
+    if (!m3 || (lv[1] && lv[6])) begin
       sp_n   <= 3'd0;
       sp_out <= 8'hff;
       miso   <= 1'b1;
@@ -95,11 +97,55 @@ module tb (
       if (lv[0] && !sp_sck) begin
         sp_sh <= {sp_sh[6:0], lv[2]};
         sp_n  <= sp_n + 3'd1;
-        if (sp_n == 3'd7) sp_out <= ~{sp_sh[6:0], lv[2]};
+        if (sp_n == 3'd7) sp_out <= lv[6] ? ~{sp_sh[6:0], lv[2]} : {sp_sh[6:0], lv[2]};
       end
       if (!lv[0] && sp_sck) miso <= sp_out[3'd7 - sp_n];
     end
   end
+
+  // I2C 从设备，只认读 0x50：应答，送 0xA5，主机不应答就停。SCL 是 x4，SDA 是 x5，开漏
+  localparam [7:0] I2_READ = {7'h50, 1'b1}, I2_BYTE = 8'ha5;
+  reg       i2_scl, i2_sda, i2_on, i2_data, i2_pull;
+  reg [3:0] i2_n;
+  reg [7:0] i2_sh;
+  wire      i2_scl_w = lv[4];
+  wire      i2_sda_w = lv[5] && !i2_pull;
+  always @(posedge clk) begin
+    i2_scl <= i2_scl_w;
+    i2_sda <= i2_sda_w;
+    if (!rst_n || !m1) begin
+      i2_on   <= 1'b0;
+      i2_data <= 1'b0;
+      i2_pull <= 1'b0;
+      i2_n    <= 4'd0;
+    end else if (i2_scl && i2_scl_w && i2_sda && !i2_sda_w) begin
+      i2_on   <= 1'b1;
+      i2_data <= 1'b0;
+      i2_pull <= 1'b0;
+      i2_n    <= 4'd0;
+    end else if (i2_scl && i2_scl_w && !i2_sda && i2_sda_w) begin
+      i2_on   <= 1'b0;
+      i2_pull <= 1'b0;
+    end else if (i2_on && !i2_scl && i2_scl_w) begin
+      if (i2_n < 4'd8) i2_sh <= {i2_sh[6:0], i2_sda_w};
+      else if (i2_data && i2_sda_w) i2_on <= 1'b0;
+      i2_n <= i2_n + 4'd1;
+    end else if (i2_on && i2_scl && !i2_scl_w) begin
+      if (i2_n == 4'd8) i2_pull <= !i2_data && i2_sh == I2_READ;
+      else if (i2_n == 4'd9) begin
+        i2_n    <= 4'd0;
+        i2_data <= i2_data || i2_sh == I2_READ;
+        i2_pull <= (i2_data || i2_sh == I2_READ) && !I2_BYTE[7];
+        if (!i2_data && i2_sh != I2_READ) i2_on <= 1'b0;
+      end else if (i2_data) i2_pull <= !I2_BYTE[4'd7-i2_n];
+    end
+  end
+
+  // 随机源：一个 16 位的 LFSR，每拍出一位
+  reg [15:0] lf;
+  always @(posedge clk) lf <= !rst_n ? 16'hace1 : {lf[14:0], lf[15] ^ lf[13] ^ lf[12] ^ lf[10]};
+
+  wire mw = x_oe[11:7] == 5'b11111 && x_oe[6:0] == 7'b0000000;
 
   // 数字式 ADC 在板上的那一半：被测电压与反馈脚各经一颗电阻汇到一颗电容上，这里拿一个封顶的累加器当电容，
   // 每拍加上两边各自相对门限的差，大于零输入脚读到 1
@@ -125,10 +171,12 @@ module tb (
     if (m1) begin
       drv[1]  = lv[0];
       drv[3]  = lv[2];
+      drv[5]  = !i2_pull;
       drv[6]  = !ow_dev;
       drv[8]  = lv[7];
       drv[9]  = ps2_clk;
       drv[10] = ps2_dat;
+      drv[11] = lv[0];
     end else if (m2) begin
       drv[3] = lv[0];
       drv[4] = lv[1];
@@ -138,13 +186,18 @@ module tb (
       drv[3]  = miso;
       drv[5]  = lv[4];
       drv[10] = lv[9];
+      drv[11] = lf[0];
     end else if (ma) begin
       drv[9]  = n0 > 24'sd0;
       drv[11] = n1 > 24'sd0;
+    end else if (mw) begin
+      drv[4:0] = lv[11:7];
     end else begin
       drv[3:0] = lv[7:4];
       drv[7:4] = lv[3:0];
     end
+    // 只把 x7 至 x10 选给 I2S 的（音视频程序就这样选）：SD 出照样接回入
+    if (x_oe[10:7] == 4'b0111) drv[10] = lv[9];
   end
   assign x_in = (x_out & x_oe) | (drv & ~x_oe);
 endmodule

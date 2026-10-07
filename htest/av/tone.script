@@ -1,0 +1,6 @@
+reject trap
+expect sum ok, jump
+expect to2610 tone
+expect tone peak 40000000
+expect thru peak
+expect tone peak 40000000

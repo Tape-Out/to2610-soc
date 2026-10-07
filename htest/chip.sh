@@ -57,8 +57,18 @@ for ip in uart gpio timer wdt rtc i2c spi onew i2s can ps2 rng emac pwm crc; do
   cp "$O/xio/gen/$ip/sw/$ip.h" "$O/xio/inc/"
 done
 make -s -C htest/xio O="$O/xio" HELLO="$K/htest/hello"
-run xio "窗后面的十五个外设：每个实例的地址各应各的；GPIO、串口、单总线、PS/2、以太网、SPI、I2S 经复用焊盘与板上的回环或片外模型走通；串口、GPIO、计时器三路中断经 PLIC 的 11、12、13 号进来；CRC 算出目录里的校验值" \
+run xio "窗后面的十五个外设：每个实例的地址各应各的；GPIO、串口、I2C、单总线、PS/2、CAN、以太网、SPI 的两根片选、I2S、PWM、看门狗复位出、计时器捕获、随机源经复用焊盘与板上的回环或片外模型走通；串口、GPIO、计时器三路中断经 PLIC 的 11、12、13 号进来；CRC 算出目录里的校验值" \
   +flash="$O/xio/xio.bin@0x100000" +script=htest/xio/script +max=60000000
+
+# 音视频的两个小程序（sw/av）原样编，仿真里只把等待缩短、每轮少放几帧
+make -s -C sw/av O="$O/av" INC="$O/xio/inc" SIM=1
+for p in tone sdm; do
+  python3 "$L/sw/pack.py" "$O/boot/boot.bin" "$O/av/$p.bin" "$O/av-$p.flash" > /dev/null
+done
+run av-tone "sw/av/tone.c：x7 至 x10 选给 I2S，正弦经板上的回环收回来峰值对得上，再把收到的原样放出去" \
+  +flash="$O/av-tone.flash@0" +script=htest/av/tone.script +max=60000000
+run av-sdm "sw/av/sdm.c：数字式 ADC 量 DAC 的码流与一个直流电平，自检读数对得上，之后每半秒报一次毫伏数" \
+  +flash="$O/av-sdm.flash@0" +script=htest/av/sdm.script +max=60000000
 
 make -s -C "$L/htest/rtos" O="$O/rtos"
 python3 "$L/sw/pack.py" "$O/boot/boot.bin" "$O/rtos/rtos.bin" "$O/rtos.flash"

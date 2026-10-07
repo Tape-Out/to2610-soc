@@ -6,7 +6,8 @@
 #   boot   引导程序带回显载荷，同上
 #   xio    窗后面的外设逐个点一遍，测试台上是回环与最小的片外模型（htest/shim.py）
 #   rtos、image  to2610-kvc 的 FreeRTOS 冒烟原样在这一颗上跑；它的 Linux 镜像先过 QEMU
-#   linux  同一份镜像在这一颗上从 Flash 起到 shell。仿真要五六个小时，带 SOC_LINUX=1 才跑
+#   linux  同一份镜像在这一颗上从 Flash 起到 shell。仿真要十个小时上下：本机带 SOC_LINUX=1 一口气跑；
+#          不带时把仿真器、镜像与脚本留在 build/linux-run，流水线上由后面几棒（htest/linux-boot.sh）接力跑完
 # 用法：chip.sh <输出目录> <gf180mcu-kianv-rv32ima-sv32 仓> <to2610-kvc 仓>。已经跑过 ran asic 的，把输出目录给 CHIP_ASIC
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -96,9 +97,15 @@ if [ -s "$I" ]; then
   if [ $rc != 0 ]; then
     res+=("linux=1:0:镜像没过 QEMU 那一关，没跑")
   elif [ "${SOC_LINUX:-}" != 1 ]; then
-    # 这一颗的仿真每秒不到三十万拍（emac 的帧缓冲区是几百个寄存器加几路大选择器），Linux 起一遍要五六个小时，
-    # 托管机的一个作业撑不到。要跑就带上 SOC_LINUX=1；没跑就不记这一段，不算过
-    echo "linux 这一段没跑（要 SOC_LINUX=1）"
+    # 这一颗的仿真每秒十几万拍（emac 的帧缓冲区是几百个寄存器加几路大选择器），托管机的一个作业起不完 Linux。
+    # 这里不记这一段，结果由接力的最后一棒报
+    python3 "$L/sw/pack.py" "$O/boot/boot.bin" "$I" "$O/linux.flash"
+    rm -rf build/linux-run
+    mkdir -p build/linux-run
+    cp "$O/sim/Vtb" "$O/linux.flash" build/linux-run/
+    # 那份脚本起到 shell 时存一次断点（给 Linux 的各层用），存到接力目录里才跟着交下去
+    sed 's|^save build/ckpt/|save build/linux-run/|' "$L/htest/linux.script" > build/linux-run/linux.script
+    echo "linux 这一段交给后面的作业（htest/linux-boot.sh）"
   else
     python3 "$L/sw/pack.py" "$O/boot/boot.bin" "$I" "$O/linux.flash"
     # 发字节的间隔 60 万拍：见 to2610-kvc 的 chip.sh

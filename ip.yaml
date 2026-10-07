@@ -120,6 +120,10 @@ tasks:
     desc: 把 soc_frame.v 里的脚逐根接错、重出 .v：整片测试里管那根脚的那一句要红，十八处
     run: bash htest/pin-faults.sh {{out}} {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.to2610-kvc}}
     timeout: 9000
+  linux-boot:
+    desc: Linux 从 Flash 起到 shell，接力跑：每一棒从前一棒的断点接着跑满时限，走完了后面的棒直接收工
+    run: bash htest/linux-boot.sh {{out}} {{dep.to2610-kvc}}
+    timeout: 19800
   chip:
     desc: 出流片的 .v，在它上面跑 to2610-kvc 的各段（裸机、riscv-tests、FreeRTOS、Linux）与外设的裸机测试
     run: bash htest/chip.sh {{out}} {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.to2610-kvc}}

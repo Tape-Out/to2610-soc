@@ -87,7 +87,7 @@ instances:
   with:
     # 帧缓冲区是触发器搭的，每个字都要钱，仿真也跟着慢。收发各 132 字、528 字节：放得下组网实验里最大的帧
     # （路由器每口 512 字节，加 4 字节 FCS），主机的 MTU 照那边设 498
-    bufWords: 264
+    bufWords: 64
     promisc: false
   addr: 0xC000
 - name: pwm0

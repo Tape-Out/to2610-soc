@@ -1,0 +1,111 @@
+xirang-lock: 1
+top: soc-io
+packages:
+- name: amba
+  version: 0.1.0
+  kind: library
+  source:
+    path: amba
+  digest: sha256:580eb25b187d414bd3343818e5cec023
+- name: can
+  version: 0.1.0
+  kind: ip
+  source:
+    path: can
+  digest: sha256:4a44b5749253eb73f367633871cc033e
+- name: crc
+  version: 0.1.0
+  kind: ip
+  source:
+    path: crc
+  digest: sha256:a0e3ae5d7ef8d7ec86fba979cdca16bd
+- name: emac
+  version: 0.1.0
+  kind: ip
+  source:
+    path: emac
+  digest: sha256:7a786ecdb104b729e1df09939316acf6
+- name: gpio
+  version: 0.1.0
+  kind: ip
+  source:
+    path: gpio
+  digest: sha256:26868e7e9d9c51a1a1020d80aea8c6c7
+- name: hwcore
+  version: 0.1.0
+  kind: library
+  source:
+    path: hwcore
+  digest: sha256:6d458b35d1377f1ebd0f54d9fb8391d0
+- name: i2c
+  version: 0.1.0
+  kind: ip
+  source:
+    path: i2c
+  digest: sha256:0269c2c927357237955a2e6ab6b3294e
+- name: i2s
+  version: 0.1.0
+  kind: ip
+  source:
+    path: i2s
+  digest: sha256:6b8181bc3d72dec5f159f2b3e61a129e
+- name: onew
+  version: 0.1.0
+  kind: ip
+  source:
+    path: onew
+  digest: sha256:c969b50cceada0931a8c1e71a745eaec
+- name: ps2
+  version: 0.1.0
+  kind: ip
+  source:
+    path: ps2
+  digest: sha256:6effecd658bd7199684ac9b1c4917c2a
+- name: pwm
+  version: 0.1.0
+  kind: ip
+  source:
+    path: pwm
+  digest: sha256:86891909f96cefd2dd13b4ff051d3607
+- name: rng
+  version: 0.1.0
+  kind: ip
+  source:
+    path: rng
+  digest: sha256:ea82b8be6fd94f7cda1ffc440fcbbf13
+- name: rtc
+  version: 0.1.0
+  kind: ip
+  source:
+    path: rtc
+  digest: sha256:6a4fea8f981a07667c522e2b02e765b0
+- name: soc-io
+  version: 0.1.0
+  kind: ip
+  source:
+    path: to2610-soc/soc-io
+  digest: sha256:2cf4a6edbefe218a2ef4e6448fbb06c0
+- name: spi
+  version: 0.1.0
+  kind: ip
+  source:
+    path: spi
+  digest: sha256:1f507afe9bbed772d9cfc680d26d9e98
+- name: timer
+  version: 0.1.0
+  kind: ip
+  source:
+    path: timer
+  digest: sha256:7e68f5c3aa95e2de6a0d8afd7d5edc05
+- name: uart
+  version: 0.1.0
+  kind: ip
+  source:
+    path: uart
+  digest: sha256:ec3dcf8bb3ddb79103d4e63290763603
+- name: wdt
+  version: 0.1.0
+  kind: ip
+  source:
+    path: wdt
+  digest: sha256:5eaaec2974d77bc251fda3754e9d10eb

@@ -96,6 +96,7 @@ asic:
   frame: mpc
   mhz: 50
   flow: syn_sta
+  util: 0.3
   # 前 54 位与 to2610-kvc 逐位相同：两颗用同一块底板；余下 12 位是窗后面的外设，排法在 hwsrc/soc_frame.v
   pads:
   - { in: bidir_in, out: bidir_out, oe: bidir_oe }

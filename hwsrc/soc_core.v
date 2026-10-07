@@ -177,11 +177,6 @@ module soc_core #(
       .ps2_pins_clk_i      (ps2_clk_i),
       .ps2_pins_data_i     (ps2_data_i),
       .rng0_pins_noise_i   (rng_noise),
-      .emac0_pins_tx_txd   (rmii_txd),
-      .emac0_pins_tx_tx_en (rmii_tx_en),
-      .emac0_pins_rx_rxd   (rmii_rxd),
-      .emac0_pins_rx_crs_dv(rmii_crs_dv),
-      .emac0_pins_rx_rx_er (rmii_rx_er),
       .pwm0_pins_pwm       (pwm),
       .pwm0_pins_pwm_n     (pwm_n),
       .irqs                (io_irqs)
@@ -260,5 +255,7 @@ module soc_core #(
                    clk_sel ? clk_prdata : 32'h0;
   assign pslverr = io_sel && io_pslverr;
   assign xio_irq = {4'b0, sd_irq, 1'b0, io_irqs};
+  assign rmii_txd = 2'b00;
+  assign rmii_tx_en = 1'b0;
 endmodule
 `default_nettype wire

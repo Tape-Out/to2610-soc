@@ -104,12 +104,17 @@ tasks:
   src:
     desc: 拼源码树：上游 KianV SoC 套上 patch/soc.patch，加息壤把 soc-io 装配出来的外设块、serdes 的模块与本仓 hwsrc 里的模块
     run: bash htest/setup.sh {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.serdes}}
+  sdm:
+    desc: 数字式 ADC 与 DAC 的单元测试：原样要过，八处埋错每处都要红
+    run: bash htest/sdm.sh {{out}} {{dep.to2610-kvc}}
+    timeout: 900
   chip:
     desc: 出流片的 .v，在它上面跑 to2610-kvc 的各段（裸机、riscv-tests、FreeRTOS、Linux）与外设的裸机测试
     run: bash htest/chip.sh {{out}} {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.to2610-kvc}}
     timeout: 14400
 test:
   upstream:
+  - { name: sdm, task: sdm, timeout: 900 }
   - { name: chip, task: chip, timeout: 14400 }
 targets:
   foreign:

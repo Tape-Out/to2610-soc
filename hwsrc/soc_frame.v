@@ -17,6 +17,7 @@
 //
 // 没选到焊盘上的输入给空闲电平：串口、I2C、单总线、CAN、PS/2 是高，其余是低。
 // 这个形态里 SerDes 的线路时钟就是系统时钟，线速率 12.5 Mbit/s。
+// 数字式 ADC 与 DAC 不另占功能组：sdm 的 PINS 位一开，x6 至 x11 在第 0 组里出的就是它的六根脚。
 `default_nettype none
 module soc_frame (
     input  wire        clk,

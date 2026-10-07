@@ -37,6 +37,7 @@ The functions, the address map, the pad table, the chip tests and the limits are
 | `0x4000_E000` | `pwm` | |
 | `0x4000_F000` | `crc` | |
 | `0x4001_0000` | `serdes_apb`, one lane of [`serdes`](https://github.com/Tape-Out/serdes) | 27 |
+| `0x4002_0000` | `sdm`, two sigma-delta DACs and two sigma-delta ADCs on six GPIO pins | |
 | `0x4003_0000` | `sysctl` | |
 
 Each peripheral's registers are in its own repository's `regmap.yaml`; `ran gen <name>` writes the C header.

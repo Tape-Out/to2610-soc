@@ -16,6 +16,7 @@ expect sdloop ok 215487ba
 expect sdirq ok 0000001b
 expect sdpad ok 00000000
 expect sderr ok 00000001
+expect sdm ok 00100018
 expect tirq ok 0000000d
 expect crc ok 000000a1
 expect done

@@ -53,6 +53,9 @@ enum { CAUSE, COUNT, CLAIM };
 #define SD (XIO + 0x10000u)
 enum { SD_CTRL = 0x04, SD_CMD = 0x08, SD_STAT = 0x0c, SD_TX = 0x10, SD_RX = 0x14, SD_NPBYTE = 0x24, SD_NPERR = 0x28 };
 enum { SD_EN = 1, SD_LOOP = 2, SD_PTX = 4, SD_PRX = 8, SD_IE = 0x100 };
+/* 数字式 ADC 与 DAC 在第 2 块，寄存器见 hwsrc/sdm.v */
+#define SDM (XIO + 0x20000u)
+enum { SDM_CTRL = 0x04, SDM_DAC0 = 0x08, SDM_ADC0 = 0x10, SDM_ADC1 = 0x14, SDM_WIN = 0x18, SDM_PRE = 0x1c };
 #define SYSCTL (XIO + 0x30000u)
 #define PADSEL (SYSCTL + 4)
 /* 12 根复用焊盘都选同一组 */
@@ -127,7 +130,7 @@ int main(void) {
   uint32_t bad, got;
 
   /* 窗里没有东西的块读回 0，不陷入也不挂住；sysctl 认得出来 */
-  verdict("hole", REG(XIO + 0x00f0000) != 0 || REG(XIO + 0x20000) != 0, REG(XIO + 0x00f0000));
+  verdict("hole", REG(XIO + 0x00f0000) != 0 || REG(XIO + 0x50000) != 0, REG(XIO + 0x00f0000));
   verdict("ident", REG(SYSCTL) != 0x534f4331, REG(SYSCTL));
 
   /* 地址：复位值各不相同的先看复位值，再给每个实例的一个可写寄存器写上各不相同的数、全部写完再读回。
@@ -287,6 +290,26 @@ int main(void) {
   verdict("sderr", bad || !got, !!got);
   REG(SD + SD_CTRL) = 0;
   REG(PADSEL) = F_GPIO;
+
+  /* 数字式 ADC 与 DAC：六根脚接管 GPIO 的第 6 至 11 位。板上第 0 路 ADC 量一个四分之一满幅的直流，
+   * 第 1 路量第 0 路 DAC 的码流（设在八分之三满幅）。窗口 1024 个节拍，头一个是半截的、取第二个；
+   * 读数除以 16 取整，该是 16 与 24 */
+  {
+    uint32_t a0 = 0, a1 = 0;
+    REG(GPIO1 + GPIO_DIR) = 0;
+    bad = REG(SDM) != 0x53444d31;
+    REG(SDM + SDM_PRE) = 0;
+    REG(SDM + SDM_WIN) = 10;
+    REG(SDM + SDM_DAC0) = 0x6000;
+    REG(SDM + SDM_CTRL) = 0x100 | 0xd;
+    for (int k = 0; k < 2; k++) {
+      bad |= UNTIL((a0 = REG(SDM + SDM_ADC0)) >> 31, 20000);
+      bad |= UNTIL((a1 = REG(SDM + SDM_ADC1)) >> 31, 20000);
+    }
+    got = ((a0 & 0x1ffff) + 8) >> 4 << 16 | ((a1 & 0x1ffff) + 8) >> 4;
+    REG(SDM + SDM_CTRL) = 0;
+    verdict("sdm", bad || got != 0x00100018, got);
+  }
 
   /* 计时器：数到比较值，经 PLIC 的 13 号进来 */
   irq(TIMER0_IRQ);

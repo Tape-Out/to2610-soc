@@ -2,6 +2,7 @@
 // 窗在 0x4000_0000，按 addr[27:16] 分块：
 //   0x000  息壤装配的 soc-io，里面每个实例一页
 //   0x001  serdes_apb：一条 SerDes 通道（Tape-Out/serdes），线路时钟另给，中断接 PLIC 的 27 号
+//   0x002  sdm：两路数字式 DAC、两路数字式 ADC，它的六根脚可以接管 GPIO 1 的第 6 至 11 位
 //   0x003  sysctl：标识与 Frame 形态的引脚复用
 // 没有东西的块读回 0、写了不管。外设的中断按 soc-io 里实例的次序接到 PLIC 的 11 号起。
 // 开漏的脚（I2C、单总线、PS/2）出的是「拉低」一根线，电平靠板上的上拉。
@@ -111,9 +112,13 @@ module soc_core (
 
   wire        io_sel = paddr[27:16] == 12'h000;
   wire        sd_sel = paddr[27:16] == 12'h001;
+  wire        sdm_sel = paddr[27:16] == 12'h002;
   wire        sys_sel = paddr[27:16] == 12'h003;
   wire        io_pready, io_pslverr, sd_irq;
-  wire [31:0] io_prdata, sd_prdata, sys_prdata;
+  wire [31:0] io_prdata, sd_prdata, sdm_prdata, sys_prdata;
+  wire [15:0] g_out, g_dir;
+  wire        ana;
+  wire [ 1:0] sdm_dac, sdm_fb;
   wire [14:0] io_irqs;
 
   to2610_soc_io io (
@@ -134,8 +139,8 @@ module soc_core (
       .uart1_pins_cts_n    (uart1_cts_n),
       .uart1_pins_rts_n    (uart1_rts_n),
       .gpio1_pins_gpio_in  (gpio1_in),
-      .gpio1_pins_gpio_out (gpio1_out),
-      .gpio1_pins_gpio_dir (gpio1_dir),
+      .gpio1_pins_gpio_out (g_out),
+      .gpio1_pins_gpio_dir (g_dir),
       .timer0_pins_capt_in (timer_capt),
       .wdt0_pins_rst_out   (wdt_rst_out),
       .i2c0_pins_scl_pull  (i2c_scl_pull),
@@ -185,6 +190,25 @@ module soc_core (
       .rx     (sd_rx)
   );
 
+  sdm sdm (
+      .clk    (clk),
+      .rst_n  (xio_resetn),
+      .psel   (psel && sdm_sel),
+      .penable(penable),
+      .pwrite (pwrite),
+      .paddr  (paddr[7:0]),
+      .pwdata (pwdata),
+      .prdata (sdm_prdata),
+      .pins   (ana),
+      .dac    (sdm_dac),
+      .adc_fb (sdm_fb),
+      .adc_in ({gpio1_in[11], gpio1_in[9]})
+  );
+
+  // 接管的六位从低到高：DAC0、DAC1、ADC0 的反馈、ADC0 的输入、ADC1 的反馈、ADC1 的输入
+  assign gpio1_out = ana ? {g_out[15:12], 1'b0, sdm_fb[1], 1'b0, sdm_fb[0], sdm_dac, g_out[5:0]} : g_out;
+  assign gpio1_dir = ana ? {g_dir[15:12], 6'b010111, g_dir[5:0]} : g_dir;
+
   sysctl sys (
       .clk    (clk),
       .rst_n  (xio_resetn),
@@ -198,7 +222,7 @@ module soc_core (
   );
 
   assign pready  = io_sel ? io_pready : 1'b1;
-  assign prdata  = io_sel ? io_prdata : sd_sel ? sd_prdata : sys_sel ? sys_prdata : 32'h0;
+  assign prdata  = io_sel ? io_prdata : sd_sel ? sd_prdata : sdm_sel ? sdm_prdata : sys_sel ? sys_prdata : 32'h0;
   assign pslverr = io_sel && io_pslverr;
   assign xio_irq = {4'b0, sd_irq, 1'b0, io_irqs};
 endmodule

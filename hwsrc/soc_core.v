@@ -1,6 +1,6 @@
 // to2610-soc 两个形态共用的核心：KianV 那颗 SoC（chip_core，带 patch/soc.patch 开的地址窗）加窗后面的外设。
 // 窗在 0x4000_0000，按 addr[27:16] 分块：
-//   0x000  息壤装配的 soc-io，里面每个实例一页
+//   0x000  息壤装配的 soc-io，里面每个实例一页；0xC000、0xD000 两页是以太网 soc-eth，只有 MPW 形态例化
 //   0x001  serdes_apb：一条 SerDes 通道（Tape-Out/serdes），线路时钟另给，中断接 PLIC 的 27 号
 //   0x002  sdm：两路数字式 DAC、两路数字式 ADC，它的六根脚可以接管 GPIO 1 的第 6 至 11 位
 //   0x003  sysctl：标识与 Frame 形态的引脚复用
@@ -131,14 +131,17 @@ module soc_core #(
   wire [15:0] g_out, g_dir;
   wire        ana;
   wire [ 1:0] sdm_dac, sdm_fb;
-  wire [14:0] io_irqs;
+  wire [13:0] io_irqs;
+  wire        eth_sel = io_sel && paddr[15:13] == 3'b110;
+  wire        eth_pready, eth_pslverr, eth_irq;
+  wire [31:0] eth_prdata;
 
   to2610_soc_io io (
       .clk                 (clk),
       .rst_n               (xio_resetn),
       .bus_paddr           ({16'h0, paddr[15:0]}),
       .bus_pprot           (3'b000),
-      .bus_psel            (psel && io_sel),
+      .bus_psel            (psel && io_sel && !eth_sel),
       .bus_penable         (penable),
       .bus_pwrite          (pwrite),
       .bus_pwdata          (pwdata),
@@ -177,15 +180,43 @@ module soc_core #(
       .ps2_pins_clk_i      (ps2_clk_i),
       .ps2_pins_data_i     (ps2_data_i),
       .rng0_pins_noise_i   (rng_noise),
-      .emac0_pins_tx_txd   (rmii_txd),
-      .emac0_pins_tx_tx_en (rmii_tx_en),
-      .emac0_pins_rx_rxd   (rmii_rxd),
-      .emac0_pins_rx_crs_dv(rmii_crs_dv),
-      .emac0_pins_rx_rx_er (rmii_rx_er),
       .pwm0_pins_pwm       (pwm),
       .pwm0_pins_pwm_n     (pwm_n),
       .irqs                (io_irqs)
   );
+
+  // Frame 的 1 mm² 里放不下以太网的帧缓冲区（两次布线都不收敛），只在 MPW 形态里有
+  generate
+    if (MPW) begin : g_eth
+      to2610_soc_eth eth (
+          .clk                 (clk),
+          .rst_n               (xio_resetn),
+          .bus_paddr           ({19'h0, paddr[12:0]}),
+          .bus_pprot           (3'b000),
+          .bus_psel            (psel && eth_sel),
+          .bus_penable         (penable),
+          .bus_pwrite          (pwrite),
+          .bus_pwdata          (pwdata),
+          .bus_pstrb           (pstrb),
+          .bus_pready          (eth_pready),
+          .bus_prdata          (eth_prdata),
+          .bus_pslverr         (eth_pslverr),
+          .emac0_pins_tx_txd   (rmii_txd),
+          .emac0_pins_tx_tx_en (rmii_tx_en),
+          .emac0_pins_rx_rxd   (rmii_rxd),
+          .emac0_pins_rx_crs_dv(rmii_crs_dv),
+          .emac0_pins_rx_rx_er (rmii_rx_er),
+          .irqs                (eth_irq)
+      );
+    end else begin : g_noeth
+      assign rmii_txd    = 2'b00;
+      assign rmii_tx_en  = 1'b0;
+      assign eth_pready  = 1'b1;
+      assign eth_prdata  = 32'h0;
+      assign eth_pslverr = 1'b0;
+      assign eth_irq     = 1'b0;
+    end
+  endgenerate
 
   serdes_apb sd (
       .pclk   (clk),
@@ -255,10 +286,11 @@ module soc_core #(
       .padsel (padsel)
   );
 
-  assign pready  = io_sel ? io_pready : 1'b1;
-  assign prdata  = io_sel ? io_prdata : sd_sel ? sd_prdata : sdm_sel ? sdm_prdata : sys_sel ? sys_prdata :
-                   clk_sel ? clk_prdata : 32'h0;
-  assign pslverr = io_sel && io_pslverr;
-  assign xio_irq = {4'b0, sd_irq, 1'b0, io_irqs};
+  assign pready  = eth_sel ? eth_pready : io_sel ? io_pready : 1'b1;
+  assign prdata  = eth_sel ? eth_prdata : io_sel ? io_prdata : sd_sel ? sd_prdata : sdm_sel ? sdm_prdata :
+                   sys_sel ? sys_prdata : clk_sel ? clk_prdata : 32'h0;
+  assign pslverr = eth_sel ? eth_pslverr : io_sel && io_pslverr;
+  // 以太网插回 soc-io 原先给它的第 12 位，后面两个的中断号不动
+  assign xio_irq = {4'b0, sd_irq, 1'b0, io_irqs[13:12], eth_irq, io_irqs[11:0]};
 endmodule
 `default_nettype wire

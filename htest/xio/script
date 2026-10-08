@@ -13,7 +13,7 @@ expect i2c ok 0000a501
 expect can ok 00000003
 expect capt ok 00000001
 expect pins ok 12481000
-expect emac ok 00020040
+expect emac ok 00000000
 expect spi ok ffedcba9
 expect spics1 ok 0000ff3c
 expect rng ok 00000003

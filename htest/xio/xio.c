@@ -7,6 +7,11 @@
 #include "can.h"
 #include "crc.h"
 #include "emac.h"
+
+/* 以太网只在 MPW 形态里有（soc-eth），Frame 形态编的时候不给 ETH */
+#ifndef ETH
+#define ETH 0
+#endif
 #include "gpio.h"
 #include "i2c.h"
 #include "i2s.h"
@@ -144,10 +149,11 @@ int main(void) {
                                 RTC0 + RTC_CFG,      I2C0 + I2C_PRESC,  SPI2 + SPI_SCKDIV,    ONEW0 + ONEW_TICK,
                                 I2S0 + I2S_DIV,      CAN0 + CAN_TXID,   PS2 + PS2_TICK,       RNG0 + RNG_CTRL,
                                 EMAC0 + EMAC_MACLO,  PWM0 + PWM_PERIOD, CRC0 + CRC_SEED};
-  /* 第 k 个写 k+1：最窄的那个寄存器（rtc 的 cfg、rng 的 ctrl）也放得下它要的那几位 */
+  /* 第 k 个写 k+1：最窄的那个寄存器（rtc 的 cfg、rng 的 ctrl）也放得下它要的那几位。
+   * Frame 形态没有以太网，那一页空着，写了读回 0 */
   for (uint32_t k = 0; k < 15; k++) REG(rw[k]) = k == 11 ? 2 : k + 1;
   bad = 0;
-  for (uint32_t k = 0; k < 15; k++) bad |= (REG(rw[k]) != (k == 11 ? 2 : k + 1)) << k;
+  for (uint32_t k = 0; k < 15; k++) bad |= (REG(rw[k]) != (k == 11 ? 2 : k == 12 && !ETH ? 0 : k + 1)) << k;
   verdict("regs", bad, bad);
   for (uint32_t k = 0; k < 15; k++) REG(rw[k]) = 0;
 
@@ -291,6 +297,7 @@ int main(void) {
   REG(WDT0 + WDT_LOAD) = 0;
   verdict("pins", bad || got != 0x12481000, got);
 
+#if ETH
   /* 以太网：RMII 的发送在板上接回接收。发一帧广播，从接收半区读回来，长度是补齐到 60 再加 4 字节 FCS */
   REG(PADSEL) = F_NET;
   REG(EMAC0 + EMAC_MACLO) = 0x56789abc;
@@ -305,6 +312,13 @@ int main(void) {
   got = REG(EMAC0 + EMAC_STATUS) << 16 | REG(EMAC0 + EMAC_RXLEN);
   REG(EMAC0 + EMAC_CTRL) = 0;
   verdict("emac", bad || (got & 0xfff) != 64, got);
+#else
+  /* 没有以太网：寄存器页与帧缓冲区页都空着，PLIC 的 23 号不会响 */
+  REG(EMAC0 + EMAC_CTRL) = 1;
+  REG(EMAC0 + EMAC_FRAME) = 0x12345678;
+  got = REG(EMAC0 + EMAC_CTRL) | REG(EMAC0 + EMAC_FRAME) | REG(EMAC0 + EMAC_STATUS);
+  verdict("emac", got != 0, got);
+#endif
 
   /* SPI：板上的回声从设备每个字节回上一个字节的反码，头一个回 0xFF。片选在四个字节之间一直按着 */
   REG(PADSEL) = F_SPI;

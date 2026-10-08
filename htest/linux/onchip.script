@@ -1,0 +1,15 @@
+reject Kernel panic
+send echo go=$((6*7))\n
+expect go=42
+send sdcard; echo sd=$?\n
+expect sd=0
+send sh /mnt/sd/xio.sh id\n
+expect 0x534F4331
+send sh /mnt/sd/serdes.sh loop 1\n
+expect 误码 0 符号
+send sh /mnt/sd/serdes.sh off; sh /mnt/sd/clkctl.sh div 3 && sh /mnt/sd/clkctl.sh show && echo ck=$((4*11))\n
+expect DIV  D=3
+expect ck=44
+reject 没对齐或没锁上
+reject No such file
+reject not found

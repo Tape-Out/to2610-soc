@@ -22,6 +22,7 @@ contract:
 deps:
   gf180mcu-kianv-rv32ima-sv32: ^0.1
   to2610-kvc: ^0.1
+  to2610-router: ^0.1
   hwcore: ^0.1
   amba: ^0.1
   uart: ^0.1
@@ -123,6 +124,14 @@ tasks:
   linux-boot:
     desc: Linux 从 Flash 起到 shell，接力跑：每一棒从前一棒的断点接着跑满时限，走完了后面的棒直接收工
     run: bash htest/linux-boot.sh {{out}} {{dep.to2610-kvc}}
+    timeout: 19800
+  linux-onchip:
+    desc: 从接力起到 shell 时存的断点接着跑：SD 卡上放 sw 下的三个片上脚本，在 Linux 里各跑一遍
+    run: bash htest/linux-onchip.sh {{out}} {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.to2610-kvc}}
+    timeout: 14400
+  linux-net:
+    desc: 同一断点接着跑 to2610-kvc 的网络四段：SD 卡、SPI 网卡口上的 W5500、经 switch 与 router 的联合仿真、经宿主机 NAT 上外网
+    run: bash htest/linux-net.sh {{out}} {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.to2610-kvc}} {{dep.to2610-router}}
     timeout: 19800
   chip:
     desc: 出流片的 .v，在它上面跑 to2610-kvc 的各段（裸机、riscv-tests、FreeRTOS、Linux）与外设的裸机测试

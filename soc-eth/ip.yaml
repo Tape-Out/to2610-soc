@@ -1,0 +1,26 @@
+name: soc-eth
+version: 0.1.0
+spec: '0.1'
+identity:
+  slug: soc-eth
+  display_name: Ethernet block of to2610-soc
+  category: soc
+  maturity: simulated
+  summary: 'The Ethernet MAC of to2610-soc behind one APB4 slave port. Only the MPW form instantiates it; the frame form has no room for its frame buffers.'
+# 窗内的偏移照旧是 0x4000_C000（寄存器）与 0x4000_D000（帧缓冲区），由 soc_core 把这两页转过来
+bus: apb4
+instances:
+- name: emac0
+  of: emac
+  with:
+    # 帧缓冲区是触发器搭的，每个字都要钱。收发各 132 字、528 字节，主机的 MTU 设 498
+    bufWords: 264
+    promisc: false
+  addr: 0x0000
+deps:
+  hwcore: ^0.1
+  amba: ^0.1
+asic:
+  top: to2610_soc_eth
+  frame: none
+  mhz: 50

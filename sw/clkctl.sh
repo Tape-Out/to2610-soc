@@ -17,17 +17,19 @@ SYS_KHZ=50000
 rd() { $DM $((B + $1)) 32; }
 wr() { $DM $((B + $1)) 32 "$2" > /dev/null; }
 
-# 读一次把「有新结果」清掉，再等下一个窗口（65536 个系统时钟，一毫秒多）
-freq() {
+# 量一次，结果放进 F（kHz）。读一次把「有新结果」清掉，再等下一个窗口（65536 个系统时钟，一毫秒多，比 devmem 起一次短得多）。
+# 有 PLL 的形态每个窗口都出新结果，没起振也出（是 0）；Frame 形态 FREQ 恒读 0，新结果永远不来：读三次都没有就是这种，FRESH 留 0
+measure() {
   rd 12 > /dev/null
-  n=0
-  while :; do
+  F=0
+  FRESH=0
+  for i in 1 2 3; do
     v=$(rd 12)
-    [ $((v >> 31 & 1)) = 1 ] && break
-    n=$((n + 1))
-    [ $n -lt 1000 ] || { echo "等不到新的测频结果" >&2; exit 1; }
+    [ $((v >> 31 & 1)) = 1 ] || continue
+    F=$(((v & 0xffffff) * SYS_KHZ / 65536))
+    FRESH=1
+    break
   done
-  echo $(((v & 0xffffff) * SYS_KHZ / 65536))
 }
 
 show() {
@@ -51,12 +53,20 @@ show() {
   else
     echo "该是 $((vco / od / (2 * (dd + 1)))) kHz（VCO $vco kHz）"
   fi
-  echo "量到 $(freq) kHz"
+  measure
+  if [ $FRESH = 1 ]; then
+    echo "量到 $F kHz"
+  else
+    echo "量到 0 kHz（这个形态没有 PLL）"
+  fi
 }
 
 case "${1:-}" in
   show) show ;;
-  freq) freq ;;
+  freq)
+    measure
+    echo $F
+    ;;
   pll)
     n=$2
     x2=0
@@ -95,7 +105,8 @@ case "${1:-}" in
     d=$(rd 8)
     case "$2" in
       pll)
-        [ "$(freq)" != 0 ] || { echo "PLL 那一路量不到时钟，不切（切过去线路这一侧就停了）" >&2; exit 1; }
+        measure
+        [ $F != 0 ] || { echo "PLL 那一路量不到时钟，不切（切过去线路这一侧就停了）" >&2; exit 1; }
         wr 8 $((d | 1 << 17))
         ;;
       sys) wr 8 $((d & ~(1 << 17))) ;;

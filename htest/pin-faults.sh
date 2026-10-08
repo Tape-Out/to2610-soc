@@ -42,7 +42,6 @@ rng~s/\.rng_noise    (`PAD(11, 3, 1.b0))/.rng_noise    (1'"'"'b0)/~rng
 cs1~s/i2s_sck, cs_n\[1\], 1.b0, sd_tx/i2s_sck, 1'"'"'b1, 1'"'"'b0, sd_tx/~spics1
 miso~s/({`PAD(3, 3, 1.b0), `PAD(2, 3, 1.b0)})/({`PAD(2, 3, 1'"'"'b0), `PAD(3, 3, 1'"'"'b0)})/~spi
 rxd~s/\.uart1_rxd    (`PAD(1, 1, 1.b1))/.uart1_rxd    (`PAD(3, 1, 1'"'"'b1))/~uart
-rmii~s/({`PAD(4, 2, 1.b0), `PAD(3, 2, 1.b0)})/({`PAD(3, 2, 1'"'"'b0), `PAD(4, 2, 1'"'"'b0)})/~emac
 i2s~s/\.i2s_sd_i     (`PAD(10, 3, 1.b0))/.i2s_sd_i     (1'"'"'b0)/~i2s
 sdrx~s/\.sd_rx        (`PAD(5, 3, 1.b0))/.sd_rx        (1'"'"'b0)/~sdpad
 onew~s/\.onew_i       (`PAD(6, 1, 1.b1))/.onew_i       (1'"'"'b1)/~onew

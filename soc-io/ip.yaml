@@ -10,7 +10,8 @@ identity:
     slave port. The KianV SoC sits outside, in the chip top, and reaches this block
     through a window of its address map.'
 # 没有核：对外的 APB4 口是这一块唯一的发起方，由芯片顶层里的 KianV 经 kv_apb 驱动。
-# 地址是窗内的偏移，窗在 0x4000_0000。中断向量的次序就是实例的次序，接 PLIC 的 11 号起；没有中断的实例排在最后
+# 地址是窗内的偏移，窗在 0x4000_0000。中断向量的次序就是实例的次序，接 PLIC 的 11 号起；没有中断的实例排在最后。
+# 以太网在另一个装配 soc-eth 里，只有 MPW 形态例化它，占 0xC000、0xD000 两页与 PLIC 的 23 号
 bus: apb4
 instances:
 - name: uart1
@@ -82,14 +83,6 @@ instances:
 - name: rng0
   of: rng
   addr: 0xB000
-- name: emac0
-  of: emac
-  with:
-    # 帧缓冲区是触发器搭的，每个字都要钱，仿真也跟着慢。收发各 132 字、528 字节：放得下组网实验里最大的帧
-    # （路由器每口 512 字节，加 4 字节 FCS），主机的 MTU 照那边设 498
-    bufWords: 264
-    promisc: false
-  addr: 0xC000
 - name: pwm0
   of: pwm
   with:

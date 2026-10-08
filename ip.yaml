@@ -22,6 +22,7 @@ contract:
 deps:
   gf180mcu-kianv-rv32ima-sv32: ^0.1
   to2610-kvc: ^0.1
+  to2610-router: ^0.1
   hwcore: ^0.1
   amba: ^0.1
   uart: ^0.1
@@ -96,6 +97,8 @@ asic:
   frame: mpc
   mhz: 50
   flow: syn_sta
+  # 布线后等价比对在托管机上到六小时的时限也没有结束；布线前的那一道照跑
+  skip: [postRouteLec]
   # 前 54 位与 to2610-kvc 逐位相同：两颗用同一块底板；余下 12 位是窗后面的外设，排法在 hwsrc/soc_frame.v
   pads:
   - { in: bidir_in, out: bidir_out, oe: bidir_oe }
@@ -113,7 +116,7 @@ tasks:
     run: bash htest/clkctl.sh {{out}} {{dep.serdes}} {{dep.to2610-kvc}}
     timeout: 3600
   onchip-scripts:
-    desc: sw 里在芯片上用的脚本拿假的 devmem 在主机上过一遍：原样要过，六处埋错每处都要红
+    desc: sw 里在芯片上用的脚本拿假的 devmem 在主机上过一遍，有 PLL 与没有 PLL 两种形态：原样要过，七处埋错每处都要红
     run: bash htest/onchip-scripts.sh {{out}}
     timeout: 600
   pin-faults:
@@ -123,6 +126,26 @@ tasks:
   linux-boot:
     desc: Linux 从 Flash 起到 shell，接力跑：每一棒从前一棒的断点接着跑满时限，走完了后面的棒直接收工
     run: bash htest/linux-boot.sh {{out}} {{dep.to2610-kvc}}
+    timeout: 19800
+  linux-onchip:
+    desc: 从接力起到 shell 时存的断点接着跑：SD 卡上放 sw 下的三个片上脚本，在 Linux 里各跑一遍
+    run: bash htest/linux-onchip.sh {{out}} {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.to2610-kvc}}
+    timeout: 19800
+  linux-sdcard:
+    desc: 同一断点接着跑 to2610-kvc 的 SD 卡一段：认卡、挂载、读文件核 md5、写文件、重挂再读
+    run: env LAYERS=sdcard bash htest/linux-net.sh {{out}} {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.to2610-kvc}} {{dep.to2610-router}}
+    timeout: 19800
+  linux-network:
+    desc: 同一断点接着跑 to2610-kvc 的网卡一段：SPI 网卡口上的 W5500 改 MAC、拿地址、ping 测试台里的主机
+    run: env LAYERS=network bash htest/linux-net.sh {{out}} {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.to2610-kvc}} {{dep.to2610-router}}
+    timeout: 19800
+  linux-netjoin:
+    desc: 同一断点接着跑 to2610-kvc 的联网一段：网线接上 switch 与 router 的联合仿真，同网段与跨网段 ping
+    run: env LAYERS=netjoin bash htest/linux-net.sh {{out}} {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.to2610-kvc}} {{dep.to2610-router}}
+    timeout: 19800
+  linux-netinet:
+    desc: 同一断点接着跑 to2610-kvc 的上网一段：联合仿真的另一头换成宿主机，过路由器 ping、TCP 取文件、查 lab.test、按名字取页面，测试不出托管机
+    run: env LAYERS=netinet bash htest/linux-net.sh {{out}} {{dep.gf180mcu-kianv-rv32ima-sv32}} {{dep.to2610-kvc}} {{dep.to2610-router}}
     timeout: 19800
   chip:
     desc: 出流片的 .v，在它上面跑 to2610-kvc 的各段（裸机、riscv-tests、FreeRTOS、Linux）与外设的裸机测试

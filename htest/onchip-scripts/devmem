@@ -4,6 +4,7 @@
 照寄存器说明另写的一份模型，不抄脚本里的算式：时钟控制（0x4005_0000）、SerDes（0x4001_0000）、
 sysctl（0x4003_0000），窗里别的地址写什么读什么。$DEVMEM_WIRED 为 1 时当作 SerDes 的 TX 在板上接回了 RX。
 PLL 照宏的规矩：N、SELECT、OD 只在 EN 由 0 变 1 的那一下取进去，开着改的不算数，并记一笔 misuse。
+$DEVMEM_FORM 为 frame 时是没有 PLL 的那种形态：时钟控制的寄存器照样读写，FREQ 恒读 0，连「有新结果」也不来。
 """
 import json
 import os
@@ -19,6 +20,7 @@ except (OSError, ValueError):
 addr = int(sys.argv[1], 0)
 val = int(sys.argv[3], 0) if len(sys.argv) > 3 else None
 CLK, SD, SYS = 0x40050000, 0x40010000, 0x40030000
+FRAME = os.environ.get("DEVMEM_FORM") == "frame"
 
 
 def legal(p):
@@ -29,7 +31,9 @@ def legal(p):
 
 def freq():
     d = st["div"] & 0xFF
-    if st["pll"] >> 16 & 1:
+    if FRAME:
+        mhz = 0.0
+    elif st["pll"] >> 16 & 1:
         mhz = 25.0
     elif st["run"] is not None:
         p = st["run"]
@@ -65,7 +69,7 @@ elif addr == CLK + 8:
             st["misuse"] += 1
         st["div"] = val & 0x300FF
 elif addr == CLK + 12:
-    out = (0x80000000 if st["fresh"] else 0) | freq()
+    out = (0x80000000 if st["fresh"] and not FRAME else 0) | freq()
     st["fresh"] = not st["fresh"]
 elif addr == CLK:
     out = 0x434C4B31

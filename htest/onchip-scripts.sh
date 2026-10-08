@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # sw/ 里在芯片上用的几个脚本（clkctl.sh、serdes.sh、xio.sh）与 padsel.py，在主机上拿假的 devmem 过一遍：
-# 原样要过，再埋六处错，每处都要红。假的 devmem 是照寄存器说明另写的模型（htest/onchip-scripts/devmem），
+# 原样要过，再埋七处错，每处都要红。假的 devmem 是照寄存器说明另写的模型（htest/onchip-scripts/devmem），
 # 经 DEVMEM 交给脚本：busybox 的 sh 先找自带的小程序再找 PATH，PATH 里放一个同名的顶不掉它。
 # 芯片上的 sh 是 busybox 的；这里用系统的 sh（dash），主机上有 busybox 时再用它跑一遍原样的。
 # 用法：onchip-scripts.sh <输出目录>
@@ -14,7 +14,7 @@ run() {
   local sw=$1 sh=$2 st=$3 got rc
   rm -f "$st"
   export DEVMEM_STATE=$st DEVMEM="$here/htest/onchip-scripts/devmem"
-  unset DEVMEM_WIRED
+  unset DEVMEM_WIRED DEVMEM_FORM
   want() {
     local what=$1 pat=$2
     shift 2
@@ -76,6 +76,14 @@ run() {
   want "写 PADSEL" "0x00000F00" $sh $sw/xio.sh pads 0x00000f00 || return 1
   want "窗里写一个字" "" $sh $sw/xio.sh w 0x20004 0x1234 || return 1
   want "窗里读回来" "0x00001234" $sh $sw/xio.sh r 0x20004 || return 1
+
+  # 没有 PLL 的形态（Frame）：FREQ 恒读 0，新结果不来，脚本要报 0，不能一直等下去
+  export DEVMEM_FORM=frame
+  want "没有 PLL 时设分频" "D=3 OUT=0 SRC=0" $sh $sw/clkctl.sh div 3 || return 1
+  want "没有 PLL 时量到的" "量到 0 kHz（这个形态没有 PLL）" $sh $sw/clkctl.sh show || return 1
+  want "没有 PLL 时单测频" "^0$" $sh $sw/clkctl.sh freq || return 1
+  refuse "没有 PLL 时不许切" "不切" $sh $sw/clkctl.sh src pll || return 1
+  unset DEVMEM_FORM
   python3 -c "import json, sys; sys.exit(json.load(open('$st'))['misuse'])" || { echo "FAIL 脚本没照 PLL 的规矩走（开着 EN 改设置，或没有时钟就切过去）"; return 1; }
   echo "PASS"
 }
@@ -96,7 +104,8 @@ fi
 FAULTS='en~clkctl.sh~s/wr 4 \$((v | 1 << 17))/wr 4 $((v | 1 << 16))/
 seq~clkctl.sh~/^    wr 4 \$v$/d
 od~clkctl.sh~s/c << 9/c << 8/
-guard~clkctl.sh~s/\[ "\$(freq)" != 0 \] ||/false \&\&/
+guard~clkctl.sh~s/\[ \$F != 0 \] ||/false \&\&/
+zero~clkctl.sh~s/^  F=0$/  F=1/
 snap~serdes.sh~s/^  wr 8 4$/  wr 8 2/
 clear~serdes.sh~/^  wr 8 2$/d'
 bad=0
@@ -120,4 +129,4 @@ while IFS='~' read -r name file expr; do
   fi
 done <<< "$FAULTS"
 [ $bad -eq 0 ] || { echo "有埋错没被抓到"; exit 1; }
-echo "片上脚本原样过，六处埋错都红"
+echo "片上脚本原样过，七处埋错都红"

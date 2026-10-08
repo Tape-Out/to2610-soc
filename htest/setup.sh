@@ -14,5 +14,6 @@ cp -r "$K/build/src" build/src
 patch -s -p1 -d build < patch/soc.patch
 # soc-io 是本仓里的一个包，不在工作区的顶层：把本仓加进搜索路径
 $XIRANG -p "$PWD" asic soc-io --no-run -o build/io > build/io.log 2>&1 || { tail -n 20 build/io.log; exit 1; }
-cp build/io/to2610_soc_io.v "$D"/hwsrc/serdes_*.v hwsrc/*.v build/src/
+$XIRANG -p "$PWD" asic soc-eth --no-run -o build/eth > build/eth.log 2>&1 || { tail -n 20 build/eth.log; exit 1; }
+cp build/io/to2610_soc_io.v build/eth/to2610_soc_eth.v "$D"/hwsrc/serdes_*.v hwsrc/*.v build/src/
 echo "build/src：$(find build/src -name '*.v' -o -name '*.sv' | wc -l) 个源文件"

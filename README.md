@@ -33,7 +33,7 @@ The functions, the address map, the pad table, the chip tests and the limits are
 | `0x4000_9000` | `can` | 20 |
 | `0x4000_A000` | `ps2` | 21 |
 | `0x4000_B000` | `rng` | 22 |
-| `0x4000_C000` | `emac`, two pages | 23 |
+| `0x4000_C000` | `emac`, two pages; the MPW form only | 23 |
 | `0x4000_E000` | `pwm` | |
 | `0x4000_F000` | `crc` | |
 | `0x4001_0000` | `serdes_apb`, one lane of [`serdes`](https://github.com/Tape-Out/serdes) | 27 |

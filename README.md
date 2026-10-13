@@ -1,6 +1,6 @@
 # to2610-soc
 
-A Linux system chip with the catalogue's peripherals, for the ECOS 2610 shuttle: the KianV RV32IMA Sv32 SoC of [`to2610-kvc`](https://github.com/Tape-Out/to2610-kvc) with a window of its address map opened onto fifteen peripherals assembled from the organisation's IP library.
+A Linux system chip with the catalogue's peripherals, for the ECOS 2610 shuttle: the KianV RV32IMA Sv32 SoC of [`to2610-kvc`](https://github.com/Tape-Out/to2610-kvc) with a window of its address map opened onto fourteen peripherals assembled from the organisation's IP library, a SerDes lane, sigma-delta converters and a clock controller.
 
 ![maturity](https://img.shields.io/badge/maturity-simulated-yellow) ![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0%20OR%20MulanPSL--2.0-blue)
 
@@ -14,6 +14,8 @@ The SoC is upstream's, its submodule untouched, taken from [`gf180mcu-kianv-rv32
 | `hwsrc/soc_core.v` | core, bridge and peripherals together, every pin a port; shared by both forms of the chip |
 | `hwsrc/soc_frame.v` | the frame form: the 54 pads of `to2610-kvc` in place, twelve more multiplexed four ways |
 | `hwsrc/sysctl.v` | identification and the pad selection register |
+
+The shuttle submission is the frame form, on the network through a W5500 module on the SPI port it shares with `to2610-kvc`. The MPW form, with the PLL macro and on-chip Ethernet, is a parameter of `soc_core` and not part of this submission.
 
 The functions, the address map, the pad table, the chip tests and the limits are in [`docs/流片说明.md`](docs/流片说明.md); the tape-out report is generated from that file.
 
@@ -51,7 +53,17 @@ $ ran test to2610-soc                     # the chip tests, on the Verilog file 
 $ ran asic to2610-soc                     # to2610_soc.v, ecc at 50 MHz, report.json
 ```
 
-The chip tests run on Verilator with pin-level models of the SDRAM, the flash and the UART: four tests of `to2610-kvc` unchanged, then `htest/xio`, a bare-metal program that reaches every peripheral through the window, drives seven of them through the multiplexed pads against loopbacks and small models of the parts on the board, and takes three interrupts through the PLIC.
+The chip tests run on Verilator with pin-level models of the SDRAM, the flash and the UART.
+
+| Test | What |
+|:--:|:--:|
+| `hello`, `periph`, `isa`, `arch-test`, `boot`, `rtos` | the tests of `to2610-kvc` unchanged: bare metal, riscv-tests, riscv-arch-test, the boot loader, FreeRTOS |
+| `xio` | a bare-metal program that reaches every peripheral through the window, drives them through the multiplexed pads against loopbacks and small models of the parts on the board, and takes four interrupts through the PLIC |
+| `av-tone`, `av-sdm` | the audio examples under `sw/av`: a tone through I2S and back, the sigma-delta ADC reading the DAC |
+| `image`, `linux` | the Linux image of `to2610-kvc` boots in QEMU, then from flash on this chip to a shell, relayed over CI jobs |
+| `linux-onchip`, `linux-sdcard`, `linux-network`, `linux-netjoin`, `linux-netinet` | from the checkpoint at the shell: the scripts under `sw/`, the SD card, the W5500 on the network, through `to2610-switch` and `to2610-router`, and TCP against a host |
+| `clkctl`, `sdm`, `onchip-scripts` | the clock controller, the converters and the on-chip scripts on their own, each with planted faults |
+| `pin-faults` | eighteen pads miswired in turn; each must turn its line of `xio` red |
 
 ## License
 
